@@ -396,6 +396,38 @@ public class ChatActivity extends BaseActivity {
                 });
     }
 
+
+    /** 复制 / 存为想法，打字结束后才出现 */
+    private void addActions(LinearLayout row, final String text) {
+        LinearLayout actions = UI.row(this, true);
+        actions.setPadding(UI.dp(this, 4), UI.dp(this, 8), 0, 0);
+        TextView save = UI.text(this, "存为想法", 12f, Colors.accent(this), Typeface.BOLD);
+        save.setPadding(0, UI.dp(this, 6), UI.dp(this, 14), UI.dp(this, 6));
+        save.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                saveAsNote(text);
+            }
+        });
+        actions.addView(save);
+
+        TextView copy = UI.text(this, "复制", 12f, Colors.text3(dark));
+        copy.setPadding(0, UI.dp(this, 6), UI.dp(this, 10), UI.dp(this, 6));
+        copy.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                android.content.ClipboardManager cm =
+                        (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+                cm.setPrimaryClip(android.content.ClipData.newPlainText("ai", text));
+                Banner.show(ChatActivity.this, dark, "已复制", false);
+            }
+        });
+        actions.addView(copy);
+
+        row.addView(actions);
+        row.addView(actions);
+    }
+
     private void showChip(String label, int chars) {
         contextChip.removeAllViews();
         contextChip.setVisibility(View.VISIBLE);
@@ -470,6 +502,11 @@ public class ChatActivity extends BaseActivity {
 
     private void addBubble(final String text, final boolean user, final List<Quote> quotes,
                            String reasoning, long elapsedMs) {
+        addBubble(text, user, quotes, reasoning, elapsedMs, false);
+    }
+
+    private void addBubble(final String text, final boolean user, final List<Quote> quotes,
+                           String reasoning, long elapsedMs, final boolean animate) {
         LinearLayout row = UI.row(this, false);
         row.setGravity(user ? Gravity.END : Gravity.START);
 
@@ -495,7 +532,8 @@ public class ChatActivity extends BaseActivity {
             row.addView(body, UI.lp(MATCH, WRAP));
         }
 
-        TextView bubble = UI.text(this, text, 14f, user ? 0xFFFFFFFF : Colors.text(dark));
+        final TextView bubble = UI.text(this, animate && !user ? "" : text, 14f,
+                user ? 0xFFFFFFFF : Colors.text(dark));
         bubble.setLineSpacing(UI.dp(this, 3), 1f);
         bubble.setTextIsSelectable(true);
         bubble.setPadding(UI.dp(this, 14), UI.dp(this, 10), UI.dp(this, 14), UI.dp(this, 10));
@@ -503,6 +541,28 @@ public class ChatActivity extends BaseActivity {
                 user ? 0x00000000 : Colors.line(dark), 0.8f));
         bubble.setMaxWidth((int) (getResources().getDisplayMetrics().widthPixels * 0.78f));
         row.addView(bubble, UI.lp(WRAP, WRAP));
+
+        if (animate && !user && text.length() > 0) {
+            final int total = text.length();
+            // 总量分 280 帧左右，长回答也不会拖太久
+            final int chunk = Math.max(1, total / 280);
+            final int[] pos = {0};
+            final android.os.Handler h = new android.os.Handler(android.os.Looper.getMainLooper());
+            bubble.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    if (isFinishing()) return;
+                    pos[0] = Math.min(total, pos[0] + chunk);
+                    bubble.setText(text.substring(0, pos[0]));
+                    scrollToBottom();
+                    if (pos[0] < total) {
+                        bubble.postDelayed(this, 16);
+                    } else {
+                        addActions(row, text);
+                    }
+                }
+            }, 40);
+        }
 
         if (!user) {
             if (quotes != null && !quotes.isEmpty()) {
@@ -527,32 +587,8 @@ public class ChatActivity extends BaseActivity {
                 row.addView(quoteBox, UI.lp(WRAP, WRAP));
             }
 
-            LinearLayout actions = UI.row(this, true);
-            actions.setPadding(UI.dp(this, 4), UI.dp(this, 8), 0, 0);
-            TextView save = UI.text(this, "存为想法", 12f, Colors.accent(this), Typeface.BOLD);
-            save.setPadding(0, UI.dp(this, 6), UI.dp(this, 14), UI.dp(this, 6));
-            save.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    saveAsNote(text);
-                }
-            });
-            actions.addView(save);
+            if (!animate) addActions(row, text);
 
-            TextView copy = UI.text(this, "复制", 12f, Colors.text3(dark));
-            copy.setPadding(0, UI.dp(this, 6), UI.dp(this, 10), UI.dp(this, 6));
-            copy.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    android.content.ClipboardManager cm =
-                            (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
-                    cm.setPrimaryClip(android.content.ClipData.newPlainText("ai", text));
-                    Banner.show(ChatActivity.this, dark, "已复制", false);
-                }
-            });
-            actions.addView(copy);
-
-            row.addView(actions);
         }
 
         LinearLayout.LayoutParams rlp = UI.lp(MATCH, WRAP);
@@ -657,7 +693,7 @@ public class ChatActivity extends BaseActivity {
                 sending = false;
                 hideThinking();
                 history.add(new Msg("assistant", out, null));
-                addBubble(out, false, lastQuotes, reasoning, ms);
+                addBubble(out, false, lastQuotes, reasoning, ms, true);
                 trim();
             }
 
