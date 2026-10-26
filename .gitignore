@@ -1,0 +1,11 @@
+app/out/
+app/build/
+tools/whale-src/
+tools/icon-*.png
+tools/*.html
+tools/whale-preview.png
+preview/shots/
+preview/index.html
+*.apk
+*.zip
+docs/_clean-*.md

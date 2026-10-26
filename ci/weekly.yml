@@ -1,0 +1,44 @@
+name: 每周回顾
+
+on:
+  schedule:
+    # UTC 周日 01:00 = 北京时间周日 09:00
+    - cron: '0 1 * * 0'
+  workflow_dispatch: # 也可以在 Actions 页面手动点
+
+concurrency:
+  group: weekly-digest
+  cancel-in-progress: true
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 生成周报
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: node scripts/weekly.mjs
+
+      - name: 提交
+        run: |
+          git config user.name "dsh-digest"
+          git config user.email "digest@users.noreply.github.com"
+          git add "Deepseek/回顾" 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "本周没有新内容，跳过提交"
+            exit 0
+          fi
+          WEEK=$(date -u +%G-W%V)
+          git commit -m "chore: 每周回顾 $WEEK"
+          git push
