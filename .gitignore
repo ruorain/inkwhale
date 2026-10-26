@@ -1,11 +1,23 @@
+# 构建产物
 app/out/
 app/build/
+app/.build/
+*.class
+*.dex
+*.jar
+*.apk
+
+# 临时
+.tmp/
 tools/whale-src/
 tools/icon-*.png
 tools/*.html
 tools/whale-preview.png
 preview/shots/
 preview/index.html
-*.apk
-*.zip
+预览.html
 docs/_clean-*.md
+
+# 系统
+.DS_Store
+Thumbs.db
