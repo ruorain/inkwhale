@@ -1,4 +1,4 @@
-# 云笔记
+# Inkwhale · 墨鲸
 
 把想法随手记进**你自己的 GitHub 仓库**的 Android 应用。
 
@@ -152,3 +152,4 @@ Deepseek/回顾/            每周自动生成
 ## 许可
 
 代码 MIT。图标来自 [Lucide](https://lucide.dev)（ISC），GitHub mark 属于 GitHub, Inc.
+
