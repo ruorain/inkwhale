@@ -28,10 +28,16 @@ public abstract class BaseActivity extends Activity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        CrashLog.install(this);
         dark = Store.isDark(this);
         setTheme(dark ? R.style.AppTheme_Dark : R.style.AppTheme_Light);
         Theme.applySystemBars(this, dark);
         super.onCreate(savedInstanceState);
+    }
+
+    protected int statusBarHeightPx() {
+        int id = getResources().getIdentifier("status_bar_height", "dimen", "android");
+        return id > 0 ? getResources().getDimensionPixelSize(id) : 0;
     }
 
     @Override

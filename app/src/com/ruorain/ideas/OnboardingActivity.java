@@ -115,11 +115,11 @@ public class OnboardingActivity extends BaseActivity {
         col.setGravity(Gravity.CENTER_HORIZONTAL);
 
         ImageView logo = new ImageView(this);
-        logo.setImageResource(R.drawable.whale);
+        logo.setImageResource(R.drawable.inkwhale);
         logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
         LinearLayout.LayoutParams wlp = new LinearLayout.LayoutParams(UI.dp(this, 96), UI.dp(this, 96));
         wlp.gravity = Gravity.CENTER_HORIZONTAL;
-        wlp.topMargin = UI.dp(this, 26);
+        wlp.topMargin = UI.dp(this, 22);
         col.addView(logo, wlp);
 
         col.addView(UI.spacer(this, 28));
@@ -316,7 +316,7 @@ public class OnboardingActivity extends BaseActivity {
         col.addView(UI.spacer(this, 24));
 
         col.addView(big("可以开始了"));
-        col.addView(line("点右下角的 + 写第一篇。"));
+        col.addView(line("点右下角的 + 写第一篇。\n想聊天就点右上角的聊天气泡。"));
 
         col.addView(UI.spacer(this, 40));
 

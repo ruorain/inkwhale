@@ -27,8 +27,12 @@ public final class Banner {
 
     public static void show(Activity a, boolean dark, String text, boolean busy) {
         if (a == null || a.isFinishing()) return;
-        ViewGroup decor = (ViewGroup) a.getWindow().getDecorView();
-        if (decor == null) return;
+        // 挂到内容区而不是 decorView：键盘弹出时内容区会缩小，横幅跟着上移，
+        // 挂 decorView 会被键盘盖住（键盘在 decor 之上的独立 window）。
+        View contentRoot = a.findViewById(android.R.id.content);
+        ViewGroup host = contentRoot != null ? (ViewGroup) contentRoot
+                : (ViewGroup) a.getWindow().getDecorView();
+        if (host == null) return;
 
         hideInternal();
 
@@ -81,7 +85,7 @@ public final class Banner {
         lp.rightMargin = UI.dp(a, 12);
         lp.bottomMargin = UI.dp(a, 18);
 
-        decor.addView(box, lp);
+        host.addView(box, lp);
         current = box;
 
         box.setTranslationY(UI.dp(a, 24));

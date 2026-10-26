@@ -216,15 +216,15 @@ public class EditorActivity extends BaseActivity {
         sepLp.rightMargin = UI.dp(this, 5);
         wrap.addView(sep, sepLp);
 
-        FrameLayout aiBtn = new FrameLayout(this);
+        TextView aiBtn = UI.text(this, "AI 整理", 12.5f, Colors.accent(this), Typeface.BOLD);
+        aiBtn.setGravity(Gravity.CENTER);
         aiBtn.setBackground(UI.roundRect(this, Colors.accentSoft(this, dark), 8));
-        ImageView aiIcon = UI.icon(this, R.drawable.ic_send, 19, Colors.accent(this));
-        aiBtn.addView(aiIcon, new FrameLayout.LayoutParams(UI.dp(this, 19), UI.dp(this, 19), Gravity.CENTER));
-        aiBtn.setLayoutParams(UI.lp(UI.dp(this, 42), UI.dp(this, 36)));
+        aiBtn.setPadding(UI.dp(this, 10), 0, UI.dp(this, 10), 0);
+        aiBtn.setLayoutParams(UI.lp(WRAP, UI.dp(this, 34)));
         aiBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                aiPolish();
+                confirmPolish();
             }
         });
         UI.press(aiBtn);
@@ -236,6 +236,24 @@ public class EditorActivity extends BaseActivity {
     }
 
     // ── DeepSeek ──────────────────────────────────────────
+    /** 整理会改写正文，先让用户确认 */
+    private void confirmPolish() {
+        String body = editor.getText().toString().trim();
+        if (body.isEmpty()) {
+            Banner.show(this, dark, "还没有内容可以整理", false);
+            return;
+        }
+        Sheet.showOptions(this, dark, "让 AI 整理这篇？",
+                "会改写当前正文（加小标题、理清条理）。\n原文会存到本地草稿，写坏了可以退出不保存。",
+                new String[]{"开始整理"},
+                new Sheet.OnPick() {
+                    @Override
+                    public void onPick(int index) {
+                        aiPolish();
+                    }
+                });
+    }
+
     private void aiPolish() {
         String key = Store.deepseekKey(this);
         if (key.isEmpty()) {

@@ -204,7 +204,7 @@ public final class GitHubApi {
                                 final Cb<String> cb) {
         async(new Task<String>() {
             public String call() throws Exception {
-                String readme = "# 云笔记\n\n"
+                String readme = "# 墨鲸\n\n"
                         + "这个仓库用来存放我的想法笔记，全部是普通的 Markdown 文件。\n\n"
                         + "```\n"
                         + "ideas/            我自己写的\n"
@@ -212,7 +212,7 @@ public final class GitHubApi {
                         + "Deepseek/回顾/    每周自动生成的回顾\n"
                         + ".versions/        旧版本归档\n"
                         + "```\n\n"
-                        + "由「云笔记」Android 应用创建和同步。删除应用不会影响这里的任何文件。\n";
+                        + "由「墨鲸」Android 应用创建和同步。删除应用不会影响这里的任何文件。\n";
 
                 JSONObject body = new JSONObject();
                 body.put("message", "docs: 初始化仓库说明");
@@ -260,7 +260,7 @@ public final class GitHubApi {
                 body.put("name", name);
                 body.put("private", priv);
                 body.put("auto_init", true);
-                body.put("description", "云笔记：Markdown 想法仓库");
+                body.put("description", "墨鲸：Markdown 想法仓库");
                 String json = request("/user/repos", "POST", token, body.toString());
                 if (json == null) throw new ApiError(404, "创建仓库失败");
                 return new JSONObject(json).optString("full_name", "");

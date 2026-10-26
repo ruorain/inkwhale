@@ -86,7 +86,16 @@ public class MainActivity extends BaseActivity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == REQ_EDITOR && resultCode == RESULT_OK) load();
+        if (requestCode == REQ_EDITOR && resultCode == RESULT_OK) {
+            load();
+            // GitHub tree 有 CDN 缓存，刚写完立刻读可能还是旧列表
+            body.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    load();
+                }
+            }, 1600);
+        }
         if (requestCode == REQ_SETTINGS) {
             Store.saveCache(this, "");
             load();
@@ -155,7 +164,7 @@ public class MainActivity extends BaseActivity {
         titles.addView(subTitle, subLp);
         bar.addView(titles, UI.lp(MATCH, WRAP, 1f));
 
-        bar.addView(iconButton(R.drawable.ic_send, new View.OnClickListener() {
+        bar.addView(iconButton(R.drawable.ic_chat, new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 startActivity(new Intent(MainActivity.this, ChatActivity.class));
@@ -254,7 +263,8 @@ public class MainActivity extends BaseActivity {
                     public void ok(List<GitHubApi.Entry> files) {
                         loading = false;
                         lastFiles = files;
-                        Store.saveCache(MainActivity.this, encode(files));
+                        // 空结果不覆盖缓存：一次异常响应不该把本地列表清空
+                        if (!files.isEmpty()) Store.saveCache(MainActivity.this, encode(files));
                         render(files);
                     }
 
@@ -451,6 +461,7 @@ public class MainActivity extends BaseActivity {
 
         body.addView(seeAllButton(files.size()));
         body.addView(helpCard());
+        body.addView(brandFooter());
     }
 
     /** 演示版：进来 5 秒后自动弹一次周报，让人看到这个功能 */
@@ -471,6 +482,39 @@ public class MainActivity extends BaseActivity {
     }
 
     private boolean demoDigestShown = false;
+
+    private View brandFooter() {
+        LinearLayout row = UI.row(this, true);
+        row.setGravity(Gravity.CENTER);
+
+        ImageView mark = new ImageView(this);
+        mark.setImageResource(R.drawable.inkwhale);
+        mark.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(UI.dp(this, 16), UI.dp(this, 16));
+        mlp.rightMargin = UI.dp(this, 7);
+        row.addView(mark, mlp);
+
+        TextView t = UI.text(this, "inkwhale · 墨鲸", 12f, Colors.text3(dark));
+        row.addView(t);
+
+        LinearLayout.LayoutParams rlp = UI.lp(MATCH, WRAP);
+        rlp.topMargin = UI.dp(this, 26);
+        rlp.bottomMargin = UI.dp(this, 18);
+        row.setLayoutParams(rlp);
+
+        row.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                try {
+                    startActivity(new Intent(Intent.ACTION_VIEW,
+                            android.net.Uri.parse("https://github.com/ruorain/inkwhale")));
+                } catch (Exception ignored) {
+                    // 没有浏览器就算了
+                }
+            }
+        });
+        return row;
+    }
 
     private View helpCard() {
         LinearLayout card = UI.row(this, true);

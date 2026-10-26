@@ -10,6 +10,37 @@ public final class Markdown {
 
     private Markdown() {}
 
+    /**
+     * 轻量富文本：只处理气泡里常见的几种 Markdown，性能优先。
+     * 粗体 / 斜体 / 行内代码 / 标题 / 引用，其余原样。
+     */
+    public static CharSequence toSpanned(String md) {
+        if (md == null || md.isEmpty()) return "";
+        String t = md.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+
+        java.util.List<String> codes = new java.util.ArrayList<String>();
+        java.util.regex.Matcher cm = java.util.regex.Pattern.compile("`([^`\n]+)`").matcher(t);
+        StringBuffer sb = new StringBuffer();
+        while (cm.find()) {
+            codes.add(cm.group(1));
+            cm.appendReplacement(sb, "\u0001" + (codes.size() - 1) + "\u0001");
+        }
+        cm.appendTail(sb);
+        t = sb.toString();
+
+        t = t.replaceAll("\\*\\*(.+?)\\*\\*", "<b>$1</b>");
+        t = t.replaceAll("(?<!\\*)\\*([^*\\n]+?)\\*(?!\\*)", "<i>$1</i>");
+        t = t.replaceAll("(?m)^#{1,6}\\s*(.+)$", "<b>$1</b>");
+        t = t.replaceAll("(?m)^&gt;\\s*(.+)$", "<i>$1</i>");
+        t = t.replaceAll("(?m)^[-*]\\s+", "· ");
+
+        for (int i = 0; i < codes.size(); i++) {
+            t = t.replace("\u0001" + i + "\u0001", "<tt>" + codes.get(i) + "</tt>");
+        }
+        return android.text.Html.fromHtml(t, android.text.Html.FROM_HTML_MODE_LEGACY);
+    }
+
+
     public static String toHtml(String md, boolean dark, int accentColor) {
         StringBuilder body = new StringBuilder();
         String[] lines = (md == null ? "" : md).replace("\r\n", "\n").replace("\r", "\n").split("\n", -1);

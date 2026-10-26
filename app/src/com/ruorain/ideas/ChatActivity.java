@@ -63,6 +63,8 @@ public class ChatActivity extends BaseActivity {
     private EditText input;
     private TextView modelLabel;
     private TextView topicLabel;
+    private String sessionId;
+    private FrameLayout drawerHost;
     private TextView effortLabel;
     private LinearLayout contextChip;
     private TextView summarizeBtn;
@@ -79,6 +81,13 @@ public class ChatActivity extends BaseActivity {
         super.onCreate(savedInstanceState);
         contextPath = getIntent().getStringExtra("contextPath");
         contextText = getIntent().getStringExtra("contextText");
+
+        migrateLegacyChat();
+        sessionId = Store.prefs(this).getString("chatSession", "");
+        if (sessionId == null || sessionId.isEmpty()) {
+            sessionId = SessionStore.newId();
+            Store.prefs(this).edit().putString("chatSession", sessionId).apply();
+        }
 
         setContentView(build());
         watchKeyboard();
@@ -104,14 +113,15 @@ public class ChatActivity extends BaseActivity {
                 o.put("t", m.text);
                 arr.put(o);
             }
-            Store.saveCurrentChat(this, arr.toString());
+            SessionStore.saveBody(this, sessionId, arr.toString());
+            SessionStore.touch(this, sessionId, Store.chatTopic(this), history.size() / 2);
         } catch (Exception ignored) {
             // 存失败不影响聊天
         }
     }
 
     private boolean restoreChat() {
-        String json = Store.loadCurrentChat(this);
+        String json = SessionStore.body(this, sessionId);
         if (json == null || json.isEmpty()) return false;
         try {
             org.json.JSONArray arr = new org.json.JSONArray(json);
@@ -136,6 +146,18 @@ public class ChatActivity extends BaseActivity {
     private LinearLayout inputWrap;
 
     /** 键盘弹起/收起都会改变根视图高度：跟着滚到底，并把输入框底部边距压到 6dp */
+    /** 老版本只有一个 current 槽，这里搬到新会话结构里，免得历史凭空消失 */
+    private void migrateLegacyChat() {
+        if (!SessionStore.list(this).isEmpty()) return;
+        String legacy = Store.loadCurrentChat(this);
+        if (legacy == null || legacy.isEmpty() || "[]".equals(legacy)) return;
+        String id = SessionStore.newId();
+        SessionStore.saveBody(this, id, legacy);
+        SessionStore.touch(this, id, Store.chatTopic(this), 1);
+        Store.prefs(this).edit().putString("chatSession", id).apply();
+        Store.saveCurrentChat(this, "");
+    }
+
     private void watchKeyboard() {
         final View root = getWindow().getDecorView();
         if (root == null) return;
@@ -245,14 +267,44 @@ public class ChatActivity extends BaseActivity {
         topicLabel = UI.text(this, Store.chatTopic(this), 15f, Colors.text(dark), Typeface.BOLD);
         topicLabel.setMaxLines(1);
         topicLabel.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        mid.addView(topicLabel);
+        LinearLayout titleRow = UI.row(this, true);
+        titleRow.setGravity(Gravity.CENTER_VERTICAL);
+        titleRow.addView(topicLabel);
+
+        ImageView pen = UI.icon(this, R.drawable.ic_pencil, 12, Colors.text3(dark));
+        pen.setAlpha(0.55f);
+        LinearLayout.LayoutParams penLp = new LinearLayout.LayoutParams(UI.dp(this, 12), UI.dp(this, 12));
+        penLp.leftMargin = UI.dp(this, 5);
+        titleRow.addView(pen, penLp);
+        pen.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Sheet.Form f = new Sheet.Form();
+                f.title = "话题名字";
+                f.label = "这段对话在聊什么";
+                f.hint = "比如：墨鲸改造、毕设选题";
+                f.initial = Store.chatTopic(ChatActivity.this);
+                f.onSubmit = new Sheet.OnForm() {
+                    @Override
+                    public void onSubmit(String value, String extra) {
+                        Store.setChatTopic(ChatActivity.this, value);
+                        String t = Store.chatTopic(ChatActivity.this);
+                        topicLabel.setText(t);
+                        SessionStore.rename(ChatActivity.this, sessionId, t);
+                    }
+                };
+                Sheet.showForm(ChatActivity.this, dark, f);
+            }
+        });
+        mid.addView(titleRow);
+
         topicLabel.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 Sheet.Form f = new Sheet.Form();
                 f.title = "话题名字";
                 f.label = "这段对话在聊什么";
-                f.hint = "比如：云笔记改造、毕设选题";
+                f.hint = "比如：墨鲸改造、毕设选题";
                 f.initial = Store.chatTopic(ChatActivity.this);
                 f.onSubmit = new Sheet.OnForm() {
                     @Override
@@ -278,29 +330,16 @@ public class ChatActivity extends BaseActivity {
         plp.topMargin = UI.dp(this, 5);
         mid.addView(picks, plp);
 
+        bar.addView(iconButton(R.drawable.ic_list, new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                openDrawer();
+            }
+        }));
         bar.addView(iconButton(R.drawable.ic_settings, new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 startActivity(new Intent(ChatActivity.this, SettingsActivity.class));
-            }
-        }));
-        bar.addView(iconButton(R.drawable.ic_plus, new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                Sheet.showOptions(ChatActivity.this, dark, "开始新对话？",
-                        "当前这段会从本机清掉，话题名也会重置",
-                        new String[]{"开始新对话"},
-                        new Sheet.OnPick() {
-                            @Override
-                            public void onPick(int index) {
-                                history.clear();
-                                Store.saveCurrentChat(ChatActivity.this, "[]");
-                                Store.setChatTopic(ChatActivity.this, "未命名对话");
-                                topicLabel.setText(Store.chatTopic(ChatActivity.this));
-                                showWelcome();
-                                Banner.show(ChatActivity.this, dark, "新对话", false);
-                            }
-                        });
             }
         }));
         return bar;
@@ -425,7 +464,6 @@ public class ChatActivity extends BaseActivity {
         actions.addView(copy);
 
         row.addView(actions);
-        row.addView(actions);
     }
 
     private void showChip(String label, int chars) {
@@ -462,6 +500,7 @@ public class ChatActivity extends BaseActivity {
     // ── 消息 ──────────────────────────────────────────────
     private void showWelcome() {
         messages.removeAllViews();
+        updateSummarizeVisibility();   // 新会话/空会话时把它收起来
         AiClient.Model model = AiClient.currentModel(this);
         boolean zp = model.isZhipu();
 
@@ -534,6 +573,13 @@ public class ChatActivity extends BaseActivity {
 
         final TextView bubble = UI.text(this, animate && !user ? "" : text, 14f,
                 user ? 0xFFFFFFFF : Colors.text(dark));
+        if (!user && !animate && text != null) {
+            try {
+                bubble.setText(Markdown.toSpanned(text));
+            } catch (Throwable ignored) {
+                // 渲染失败就退回纯文本
+            }
+        }
         bubble.setLineSpacing(UI.dp(this, 3), 1f);
         bubble.setTextIsSelectable(true);
         bubble.setPadding(UI.dp(this, 14), UI.dp(this, 10), UI.dp(this, 14), UI.dp(this, 10));
@@ -613,6 +659,35 @@ public class ChatActivity extends BaseActivity {
 
     // ── 思考占位 ──────────────────────────────────────────
     private LinearLayout thinkingRow;
+    private LinearLayout streamRow;
+    private TextView streamBubble;
+
+    /** 流式输出时先在列表底部开一个空气泡，后续往里追加文字 */
+    private void prepareStreamBubble() {
+        streamRow = UI.row(this, false);
+        streamRow.setGravity(Gravity.START);
+        streamBubble = UI.text(this, "", 14f, Colors.text(dark));
+        streamBubble.setLineSpacing(UI.dp(this, 3), 1f);
+        streamBubble.setTextIsSelectable(true);
+        streamBubble.setPadding(UI.dp(this, 14), UI.dp(this, 10), UI.dp(this, 14), UI.dp(this, 10));
+        streamBubble.setBackground(UI.roundRect(this, Colors.surface(dark), 14,
+                Colors.line(dark), 0.8f));
+        streamBubble.setMaxWidth((int) (getResources().getDisplayMetrics().widthPixels * 0.78f));
+        streamRow.addView(streamBubble, UI.lp(WRAP, WRAP));
+
+        LinearLayout.LayoutParams rlp = UI.lp(MATCH, WRAP);
+        rlp.topMargin = UI.dp(this, 10);
+        streamRow.setLayoutParams(rlp);
+        messages.addView(streamRow);
+    }
+
+    private void dropStreamBubble() {
+        if (streamRow != null) {
+            messages.removeView(streamRow);
+            streamRow = null;
+        }
+        streamBubble = null;
+    }
     private TextView thinkingDots;
     private int dotPhase;
     private final Runnable dotTick = new Runnable() {
@@ -687,20 +762,45 @@ public class ChatActivity extends BaseActivity {
         sending = true;
         showThinking(model);
 
-        AiClient.chat(this, model, effort, buildMessages(quotes), new AiClient.Cb() {
+        final StringBuilder acc = new StringBuilder();
+        AiClient.streamChat(this, model, effort, buildMessages(quotes), new AiClient.StreamCb() {
             @Override
-            public void ok(String out, String reasoning, long ms) {
-                sending = false;
-                hideThinking();
-                history.add(new Msg("assistant", out, null));
-                addBubble(out, false, lastQuotes, reasoning, ms, true);
-                trim();
+            public void onDelta(String delta) {
+                if (isFinishing() || delta == null || "null".equals(delta)) return;
+                try {
+                    if (streamBubble == null) {
+                        hideThinking();
+                        prepareStreamBubble();
+                    }
+                    acc.append(delta);
+                    streamBubble.setText(acc.toString());
+                    scrollToBottom();
+                } catch (Throwable ignored) {
+                    // 单帧失败不该终止整个回答
+                }
             }
 
             @Override
-            public void err(String message) {
+            public void onDone(String out, String reasoning, long ms) {
                 sending = false;
                 hideThinking();
+                dropStreamBubble();
+                if (out == null || out.trim().isEmpty()) {
+                    addBubble("这次没有返回内容，再试一次？", false, null, null, 0);
+                    return;
+                }
+                history.add(new Msg("assistant", out, null));
+                addBubble(out, false, lastQuotes, reasoning, ms);
+                trim();
+                autoNameIfNeeded();
+                persistChat();
+            }
+
+            @Override
+            public void onError(String message) {
+                sending = false;
+                hideThinking();
+                dropStreamBubble();
                 addBubble("出错了：" + message, false, null, null, 0);
             }
         });
@@ -779,18 +879,24 @@ public class ChatActivity extends BaseActivity {
     private JSONArray buildMessages(List<Quote> quotes) {
         JSONArray arr = new JSONArray();
         try {
+            AiClient.Model mForName = AiClient.currentModel(this);
+            String who = mForName.isZhipu() ? "智谱 GLM" : "DeepSeek";
             StringBuilder sys = new StringBuilder(
-                    "你是用户的思路伙伴。回答简洁、具体，优先给可执行的做法，不要用 # 标题符号堆格式。\n"
-                            + "主动追问的规则：\n"
-                            + "1. 需求缺关键信息时，先用一两个问题问清楚，别猜着往下写。\n"
-                            + "2. 给完建议后，如果确实有明显的下一步，可以追问一句（要不要继续细化 / 换个角度 / 直接落成文档）。\n"
-                            + "3. 不要每轮都追问，问一次够用就别重复；用户已经在推进时，直接做事而不是再问。\n"
-                            + "4. 追问要短，一句话说完，不要罗列一堆可选项堵在用户面前。\n"
-                            + "启发的规则：\n"
-                            + "5. 用户卡住时，给一个具体的类比或别的领域的做法，不要只给抽象原则。\n"
-                            + "6. 发现想法里有明显盲区，直接指出并给一个反例，别用「建议再考虑周全」这种空话。\n"
-                            + "7. 最多提一个用户没想到的替代方案；提了就说明它好在哪、代价是什么。\n"
-                            + "8. 不要为了显得有深度而堆术语或分点罗列，宁可少说一句。");
+                    "你是墨鲸里的 AI 助手，由 " + who + " 提供。\n"
+                            + "身份：你就是 " + who + " 的模型（" + mForName.label + "）。"
+                            + "被问到时如实回答，不要说自己属于其他公司。\n\n"
+                            + "怎么回答：\n"
+                            + "- 先给具体能做的事，少讲抽象原则\n"
+                            + "- 信息不够时，问一两个关键问题就好，不要一次抛一堆\n"
+                            + "- 用户已经在推进时，直接帮忙做，不要再追问\n"
+                            + "- 发现盲区可以直接说出来，配一个具体例子，不用泛泛地提醒\n"
+                            + "- 想到更好的做法可以说，一次说一个，讲清好在哪、代价是什么\n\n"
+                            + "说话方式：\n"
+                            + "- 像朋友聊天，语气平和，不用命令式的短句\n"
+                            + "- 不用 # 标题符号堆格式，正常分段就行\n"
+                            + "- 不堆术语，不为了显得专业而分点罗列\n"
+                            + "- 自然收尾，不必每段都加一句总结\n");
+
             if (contextText != null && !contextText.isEmpty()) {
                 String t = contextText.length() > 6000 ? contextText.substring(0, 6000) : contextText;
                 sys.append("\n\n【用户当前正在看的想法】\n").append(t);
@@ -822,6 +928,232 @@ public class ChatActivity extends BaseActivity {
 
     private void trim() {
         while (history.size() > MAX_TURNS * 2) history.remove(0);
+    }
+
+
+    // ── 会话抽屉 ──────────────────────────────────────────
+    private void openDrawer() {
+        if (drawerHost != null) return;
+        final int wPx = (int) (getResources().getDisplayMetrics().widthPixels * 0.82f);
+
+        drawerHost = new FrameLayout(this);
+        drawerHost.setBackgroundColor(0x66000000);
+        drawerHost.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                closeDrawer();
+            }
+        });
+
+        LinearLayout panel = UI.row(this, false);
+        android.graphics.drawable.GradientDrawable pbg = new android.graphics.drawable.GradientDrawable();
+        pbg.setColor(Colors.bg(dark));
+        float pr = UI.dp(this, 18);
+        pbg.setCornerRadii(new float[]{pr, pr, 0, 0, 0, 0, pr, pr});
+        panel.setBackground(pbg);
+        panel.setPadding(UI.dp(this, 20), UI.dp(this, 22), UI.dp(this, 20), UI.dp(this, 18));
+        panel.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                // 吃掉点击，不传给遮罩
+            }
+        });
+
+        panel.addView(UI.text(this, "会话", 20f, Colors.text(dark), Typeface.BOLD));
+
+        TextView newBtn = UI.text(this, "＋  新对话", 14f, Colors.accent(this), Typeface.BOLD);
+        newBtn.setGravity(Gravity.CENTER_VERTICAL);
+        newBtn.setBackground(UI.roundRect(this, Colors.accentSoft(this, dark), 12));
+        newBtn.setPadding(UI.dp(this, 14), UI.dp(this, 13), UI.dp(this, 14), UI.dp(this, 13));
+        LinearLayout.LayoutParams nlp = UI.lp(MATCH, WRAP);
+        nlp.topMargin = UI.dp(this, 16);
+        nlp.bottomMargin = UI.dp(this, 18);
+        panel.addView(newBtn, nlp);
+        newBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                startNewSession();
+            }
+        });
+
+        android.widget.ScrollView sv = new android.widget.ScrollView(this);
+        LinearLayout list = UI.row(this, false);
+
+        java.util.List<SessionStore.Session> all = SessionStore.list(this);
+        if (all.isEmpty()) {
+            TextView empty = UI.text(this, "还没有会话", 13f, Colors.text3(dark));
+            empty.setPadding(UI.dp(this, 4), UI.dp(this, 8), 0, 0);
+            list.addView(empty);
+        }
+        for (final SessionStore.Session it : all) {
+            LinearLayout rowItem = UI.row(this, false);
+            rowItem.setPadding(UI.dp(this, 12), UI.dp(this, 12), UI.dp(this, 12), UI.dp(this, 12));
+            boolean cur = it.id.equals(sessionId);
+            rowItem.setBackground(UI.roundRect(this,
+                    cur ? Colors.accentSoft(this, dark) : 0x00000000, 10));
+
+            TextView name = UI.text(this, it.topic, 14f,
+                    cur ? Colors.accent(this) : Colors.text(dark),
+                    cur ? Typeface.BOLD : Typeface.NORMAL);
+            name.setMaxLines(1);
+            name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            rowItem.addView(name, UI.lp(MATCH, WRAP, 1f));
+
+            String meta = it.turns > 0 ? (it.turns + " 轮") : timeAgo(it.updatedAt);
+            TextView m = UI.text(this, meta, 11.5f, Colors.text3(dark));
+            LinearLayout.LayoutParams mlp = UI.lp(WRAP, WRAP);
+            mlp.leftMargin = UI.dp(this, 8);
+            rowItem.addView(m, mlp);
+
+            rowItem.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    switchTo(it.id, it.topic);
+                }
+            });
+            rowItem.setOnLongClickListener(new View.OnLongClickListener() {
+                @Override
+                public boolean onLongClick(View v) {
+                    Sheet.showOptions(ChatActivity.this, dark, it.topic, null,
+                            new String[]{"改名字", "删除这段会话"},
+                            new Sheet.OnPick() {
+                                @Override
+                                public void onPick(int index) {
+                                    if (index == 0) renameSession(it.id, it.topic);
+                                    else deleteSession(it.id);
+                                }
+                            });
+                    return true;
+                }
+            });
+
+            LinearLayout.LayoutParams rlp = UI.lp(MATCH, WRAP);
+            rlp.topMargin = UI.dp(this, 4);
+            list.addView(rowItem, rlp);
+        }
+
+        sv.addView(list);
+        panel.addView(sv, UI.lp(MATCH, 0, 1f));
+
+        FrameLayout.LayoutParams plp = new FrameLayout.LayoutParams(wPx, MATCH);
+        plp.gravity = Gravity.END;
+        drawerHost.addView(panel, plp);
+
+        FrameLayout decor = (FrameLayout) getWindow().getDecorView();
+        decor.addView(drawerHost, new FrameLayout.LayoutParams(MATCH, MATCH));
+
+        panel.setTranslationX(wPx);
+        drawerHost.setAlpha(0f);
+        drawerHost.animate().alpha(1f).setDuration(180).start();
+        panel.animate().translationX(0f).setDuration(280)
+                .setInterpolator(new android.view.animation.PathInterpolator(0.16f, 1f, 0.3f, 1f))
+                .start();
+    }
+
+    private void closeDrawer() {
+        if (drawerHost == null) return;
+        final FrameLayout host = drawerHost;
+        drawerHost = null;
+        View panel = host.getChildAt(0);
+        if (panel != null) {
+            panel.animate().translationX(panel.getWidth()).setDuration(220)
+                    .setInterpolator(new android.view.animation.PathInterpolator(0.4f, 0f, 1f, 1f))
+                    .start();
+        }
+        host.animate().alpha(0f).setDuration(200)
+                .withEndAction(new Runnable() {
+                    @Override
+                    public void run() {
+                        ViewGroup parent = (ViewGroup) host.getParent();
+                        if (parent != null) parent.removeView(host);
+                    }
+                }).start();
+    }
+
+    /** 未命名会话在第一次提问后自动起个名字，省得列表全是「未命名对话」 */
+    private void autoNameIfNeeded() {
+        String cur = Store.chatTopic(this);
+        if (!"未命名对话".equals(cur)) return;
+        String first = null;
+        for (Msg m : history) {
+            if ("user".equals(m.role) && m.text != null && !m.text.trim().isEmpty()) {
+                first = m.text.trim();
+                break;
+            }
+        }
+        if (first == null) return;
+        String t = smartTitle(first);
+        if (t == null || t.isEmpty()) return;
+        Store.setChatTopic(this, t);
+        if (topicLabel != null) topicLabel.setText(t);
+        SessionStore.rename(this, sessionId, t);
+    }
+
+    private String timeAgo(long ts) {
+        long d = System.currentTimeMillis() - ts;
+        if (d < 60000) return "刚刚";
+        if (d < 3600000) return (d / 60000) + " 分钟前";
+        if (d < 86400000) return (d / 3600000) + " 小时前";
+        return (d / 86400000) + " 天前";
+    }
+
+    private void switchTo(String id, String topic) {
+        persistChat();
+        sessionId = id;
+        Store.prefs(this).edit().putString("chatSession", id).apply();
+        Store.setChatTopic(this, topic);
+        topicLabel.setText(topic);
+        closeDrawer();
+        history.clear();
+        messages.removeAllViews();
+        if (!restoreChat()) showWelcome();
+    }
+
+    private void startNewSession() {
+        persistChat();
+        SessionStore.touch(this, sessionId, Store.chatTopic(this), history.size() / 2);
+        sessionId = SessionStore.newId();
+        Store.prefs(this).edit().putString("chatSession", sessionId).apply();
+        Store.setChatTopic(this, "未命名对话");
+        topicLabel.setText(Store.chatTopic(this));
+        closeDrawer();
+        history.clear();
+        messages.removeAllViews();
+        showWelcome();
+    }
+
+    private void renameSession(final String id, String current) {
+        Sheet.Form f = new Sheet.Form();
+        f.title = "改个名字";
+        f.label = "这段对话在聊什么";
+        f.initial = current;
+        f.onSubmit = new Sheet.OnForm() {
+            @Override
+            public void onSubmit(String value, String extra) {
+                String t = value.trim().isEmpty() ? "未命名对话" : value.trim();
+                SessionStore.rename(ChatActivity.this, id, t);
+                if (id.equals(sessionId)) {
+                    Store.setChatTopic(ChatActivity.this, t);
+                    topicLabel.setText(t);
+                }
+                closeDrawer();
+            }
+        };
+        Sheet.showForm(this, dark, f);
+    }
+
+    private void deleteSession(final String id) {
+        SessionStore.remove(this, id);
+        if (id.equals(sessionId)) {
+            sessionId = SessionStore.newId();
+            Store.prefs(this).edit().putString("chatSession", sessionId).apply();
+            Store.setChatTopic(this, "未命名对话");
+            topicLabel.setText(Store.chatTopic(this));
+            history.clear();
+            messages.removeAllViews();
+            showWelcome();
+        }
+        closeDrawer();
     }
 
     // ── 存为想法 ──────────────────────────────────────────

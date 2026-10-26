@@ -184,6 +184,161 @@ public final class AiClient {
         }
     }
 
+
+    // ── 真流式：SSE 逐块返回 ──────────────────────────────
+    public interface StreamCb {
+        /** 主线程回调，delta 是本次新增的一段文字 */
+        void onDelta(String delta);
+
+        void onDone(String content, String reasoning, long elapsedMs);
+
+        void onError(String message);
+    }
+
+    public static void streamChat(Context c, Model m, int effort, JSONArray messages,
+                                  final StreamCb cb) {
+        final String url = m.isZhipu()
+                ? "https://open.bigmodel.cn/api/paas/v4/chat/completions"
+                : "https://api.deepseek.com/chat/completions";
+        final String key = keyFor(c, m.provider);
+        if (key.isEmpty()) {
+            cb.onError(m.isZhipu() ? "还没配智谱 API Key" : "还没配 DeepSeek API Key");
+            return;
+        }
+
+        final JSONObject body = new JSONObject();
+        try {
+            body.put("model", m.id);
+            body.put("messages", messages);
+            body.put("stream", true);
+            JSONObject thinking = new JSONObject();
+            if (m.isZhipu()) {
+                thinking.put("type", effort == EFFORT_OFF ? "disabled" : "enabled");
+                body.put("thinking", thinking);
+            } else {
+                thinking.put("type", effort == EFFORT_OFF ? "disabled" : "enabled");
+                body.put("thinking", thinking);
+                if (effort != EFFORT_OFF) {
+                    body.put("reasoning_effort",
+                            effort == EFFORT_MAX ? "max" : effort == EFFORT_LOW ? "low" : "high");
+                } else {
+                    body.put("temperature", 0.7);
+                }
+            }
+        } catch (Exception e) {
+            cb.onError("组装请求失败：" + e.getMessage());
+            return;
+        }
+
+        final long started = System.currentTimeMillis();
+        POOL.execute(new Runnable() {
+            @Override
+            public void run() {
+                java.net.HttpURLConnection conn = null;
+                try {
+                    conn = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+                    conn.setRequestMethod("POST");
+                    conn.setConnectTimeout(20000);
+                    conn.setReadTimeout(180000);
+                    conn.setDoOutput(true);
+                    conn.setRequestProperty("Content-Type", "application/json");
+                    conn.setRequestProperty("Authorization", "Bearer " + key);
+                    conn.setRequestProperty("Accept", "text/event-stream");
+
+                    java.io.OutputStream os = conn.getOutputStream();
+                    os.write(body.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                    os.close();
+
+                    int code = conn.getResponseCode();
+                    if (code < 200 || code >= 300) {
+                        String err = readStream(conn.getErrorStream());
+                        final String msg = "HTTP " + code + "：" + err;
+                        MAIN.post(new Runnable() {
+                            @Override
+                            public void run() {
+                                cb.onError(msg);
+                            }
+                        });
+                        return;
+                    }
+
+                    // 逐行读 SSE
+                    java.io.BufferedReader br = new java.io.BufferedReader(
+                            new java.io.InputStreamReader(conn.getInputStream(),
+                                    java.nio.charset.StandardCharsets.UTF_8));
+                    StringBuilder full = new StringBuilder();
+                    StringBuilder reasoning = new StringBuilder();
+                    String line;
+                    while ((line = br.readLine()) != null) {
+                        if (!line.startsWith("data:")) continue;
+                        String data = line.substring(5).trim();
+                        if (data.isEmpty() || "[DONE]".equals(data)) continue;
+                        try {
+                            JSONObject chunk = new JSONObject(data);
+                            JSONArray choices = chunk.optJSONArray("choices");
+                            if (choices == null || choices.length() == 0) continue;
+                            JSONObject delta = choices.getJSONObject(0).optJSONObject("delta");
+                            if (delta == null) continue;
+
+                            String rc = delta.isNull("reasoning_content") ? ""
+                                    : delta.optString("reasoning_content", "");
+                            if (!rc.isEmpty()) reasoning.append(rc);
+
+                            final String piece = delta.isNull("content") ? ""
+                                    : delta.optString("content", "");
+                            if (!piece.isEmpty()) {
+                                full.append(piece);
+                                MAIN.post(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        cb.onDelta(piece);
+                                    }
+                                });
+                            }
+                        } catch (Exception ignored) {
+                            // 单块解析失败就跳过
+                        }
+                    }
+                    br.close();
+
+                    final String out = full.toString().trim();
+                    final String reason = reasoning.toString().trim();
+                    final long ms = System.currentTimeMillis() - started;
+                    MAIN.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            cb.onDone(out, reason, ms);
+                        }
+                    });
+                } catch (final Exception e) {
+                    final String msg = e.getMessage() == null ? "网络失败" : e.getMessage();
+                    MAIN.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            cb.onError(msg);
+                        }
+                    });
+                } finally {
+                    if (conn != null) conn.disconnect();
+                }
+            }
+        });
+    }
+
+    private static String readStream(java.io.InputStream in) {
+        if (in == null) return "";
+        try {
+            java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+            byte[] buf = new byte[4096];
+            int n;
+            while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
+            in.close();
+            return new String(bos.toByteArray(), java.nio.charset.StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
     private static Result post(String url, String key, String body) throws Exception {
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
         c.setRequestMethod("POST");

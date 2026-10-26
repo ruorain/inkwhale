@@ -32,6 +32,7 @@ public class SettingsActivity extends BaseActivity {
     private View build() {
         LinearLayout col = UI.row(this, false);
         col.setBackgroundColor(Colors.bg(dark));
+        col.setPadding(0, statusBarHeightPx(), 0, 0);
         col.addView(buildBar());
 
         ScrollView sv = new ScrollView(this);
@@ -124,21 +125,7 @@ public class SettingsActivity extends BaseActivity {
 
         body.addView(sectionLabel("关于"));
         body.addView(card(
-                row(0, "版本", "3.5.0 (30)", null),
-                row(R.drawable.ic_github, "开源地址", "github.com/ruorain/inkwhale",
-                        new Runnable() {
-                            @Override
-                            public void run() {
-                                openUrl("https://github.com/ruorain/inkwhale");
-                            }
-                        }),
-                row(0, "B 站", "@若雨の号",
-                        new Runnable() {
-                            @Override
-                            public void run() {
-                                openUrl("https://search.bilibili.com/all?keyword=%E8%8B%A5%E9%9B%A8%E3%81%AE%E5%8F%B7");
-                            }
-                        }),
+                row(0, "版本", versionLabel(), null),
                 row(R.drawable.ic_file_text, "使用说明", "怎么用 · 常见问题",
                         new Runnable() {
                             @Override
@@ -149,8 +136,40 @@ public class SettingsActivity extends BaseActivity {
                                 startActivity(i);
                             }
                         }),
+                row(R.drawable.ic_github, "开源地址", "ruorain/inkwhale",
+                        new Runnable() {
+                            @Override
+                            public void run() {
+                                openUrl("https://github.com/ruorain/inkwhale");
+                            }
+                        }),
+                row(R.drawable.ic_external_link, "B 站", "@若雨の号",
+                        new Runnable() {
+                            @Override
+                            public void run() {
+                                openUrl("https://search.bilibili.com/all?keyword=%E8%8B%A5%E9%9B%A8%E3%81%AE%E5%8F%B7");
+                            }
+                        })));
+
+        body.addView(sectionLabel("其他"));
+        body.addView(card(
+                row(R.drawable.ic_file_text, "上次崩溃",
+                        CrashLog.has(this) ? "有记录，点开截图发我" : "没有记录",
+                        new Runnable() {
+                            @Override
+                            public void run() {
+                                if (!CrashLog.has(SettingsActivity.this)) {
+                                    Banner.show(SettingsActivity.this, dark, "还没崩过", false);
+                                    return;
+                                }
+                                Intent i = new Intent(SettingsActivity.this, PreviewActivity.class);
+                                i.putExtra("content", CrashLog.last(SettingsActivity.this));
+                                i.putExtra("title", "上次崩溃");
+                                startActivity(i);
+                            }
+                        }),
+                row(0, "AI 产出目录", Store.agentRoot(this) + "/", null),
                 row(0, "图标", "Lucide · ISC", null),
-                row(R.drawable.ic_file_text, "DeepSeek 产出目录", Store.agentRoot(this) + "/", null),
                 row(0, "退出演示模式", Store.isDemo(this) ? "演示中，点这里退出" : "已关闭",
                         new Runnable() {
                             @Override
@@ -161,6 +180,17 @@ public class SettingsActivity extends BaseActivity {
                                 finish();
                             }
                         })));
+    }
+
+    /** 版本号从系统读，别再手写 */
+    private String versionLabel() {
+        try {
+            android.content.pm.PackageInfo pi =
+                    getPackageManager().getPackageInfo(getPackageName(), 0);
+            return pi.versionName + " (" + pi.versionCode + ")";
+        } catch (Exception e) {
+            return "—";
+        }
     }
 
     private void openUrl(String url) {
