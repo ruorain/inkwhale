@@ -1,5 +1,10 @@
 # Inkwhale · 墨鲸
 
+[![release](https://img.shields.io/github/v/release/ruorain/inkwhale?color=2F6FED)](https://github.com/ruorain/inkwhale/releases)
+[![license](https://img.shields.io/github/license/ruorain/inkwhale)](LICENSE)
+[![apk](https://img.shields.io/badge/APK-177%20KB-2F6FED)](https://github.com/ruorain/inkwhale/releases/latest)
+[![android](https://img.shields.io/badge/Android-8.0%2B-3DDC84)](https://github.com/ruorain/inkwhale/releases/latest)
+
 把想法随手记进**你自己的 GitHub 仓库**的 Android 应用。
 
 没有服务器、没有账号体系、没有云同步服务——你的笔记就是仓库里的一堆 `.md` 文件，永远属于你。

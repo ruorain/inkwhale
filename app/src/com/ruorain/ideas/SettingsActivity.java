@@ -124,7 +124,21 @@ public class SettingsActivity extends BaseActivity {
 
         body.addView(sectionLabel("关于"));
         body.addView(card(
-                row(0, "版本", "2.0.0 (14)", null),
+                row(0, "版本", "3.5.0 (30)", null),
+                row(R.drawable.ic_github, "开源地址", "github.com/ruorain/inkwhale",
+                        new Runnable() {
+                            @Override
+                            public void run() {
+                                openUrl("https://github.com/ruorain/inkwhale");
+                            }
+                        }),
+                row(0, "B 站", "@若雨の号",
+                        new Runnable() {
+                            @Override
+                            public void run() {
+                                openUrl("https://search.bilibili.com/all?keyword=%E8%8B%A5%E9%9B%A8%E3%81%AE%E5%8F%B7");
+                            }
+                        }),
                 row(R.drawable.ic_file_text, "使用说明", "怎么用 · 常见问题",
                         new Runnable() {
                             @Override
@@ -147,6 +161,14 @@ public class SettingsActivity extends BaseActivity {
                                 finish();
                             }
                         })));
+    }
+
+    private void openUrl(String url) {
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)));
+        } catch (Exception e) {
+            Banner.show(this, dark, "没有能打开网页的应用", false);
+        }
     }
 
     private void confirmDeployCi() {
