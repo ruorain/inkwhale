@@ -206,19 +206,21 @@ public class EditorActivity extends BaseActivity {
             tools.addView(btn);
         }
 
-        // 分隔 + DeepSeek 整理
+        hs.addView(tools);
+
+        // 右侧固定区：分隔 + AI（不参与横向滚动，永远可见）
         View sep = new View(this);
         sep.setBackgroundColor(Colors.line(dark));
         LinearLayout.LayoutParams sepLp = new LinearLayout.LayoutParams(UI.dp(this, 1), UI.dp(this, 18));
         sepLp.leftMargin = UI.dp(this, 5);
         sepLp.rightMargin = UI.dp(this, 5);
-        tools.addView(sep, sepLp);
+        wrap.addView(sep, sepLp);
 
         FrameLayout aiBtn = new FrameLayout(this);
         aiBtn.setBackground(UI.roundRect(this, Colors.accentSoft(this, dark), 8));
         ImageView aiIcon = UI.icon(this, R.drawable.ic_send, 19, Colors.accent(this));
         aiBtn.addView(aiIcon, new FrameLayout.LayoutParams(UI.dp(this, 19), UI.dp(this, 19), Gravity.CENTER));
-        aiBtn.setLayoutParams(UI.lp(UI.dp(this, 38), UI.dp(this, 36)));
+        aiBtn.setLayoutParams(UI.lp(UI.dp(this, 42), UI.dp(this, 36)));
         aiBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -226,10 +228,10 @@ public class EditorActivity extends BaseActivity {
             }
         });
         UI.press(aiBtn);
-        tools.addView(aiBtn);
+        wrap.addView(aiBtn);
 
-        hs.addView(tools, UI.lp(WRAP, WRAP));
-        wrap.addView(hs, UI.lp(MATCH, WRAP));
+        LinearLayout.LayoutParams hl = UI.lp(0, WRAP, 1f);
+        wrap.addView(hs, hl);
         return wrap;
     }
 

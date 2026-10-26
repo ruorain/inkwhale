@@ -284,12 +284,12 @@ public class ChatActivity extends BaseActivity {
                 startActivity(new Intent(ChatActivity.this, SettingsActivity.class));
             }
         }));
-        bar.addView(iconButton(R.drawable.ic_trash_2, new View.OnClickListener() {
+        bar.addView(iconButton(R.drawable.ic_plus, new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                Sheet.showOptions(ChatActivity.this, dark, "清空这段对话？",
-                        "内容会从本机删掉，话题名也会重置",
-                        new String[]{"清空"},
+                Sheet.showOptions(ChatActivity.this, dark, "开始新对话？",
+                        "当前这段会从本机清掉，话题名也会重置",
+                        new String[]{"开始新对话"},
                         new Sheet.OnPick() {
                             @Override
                             public void onPick(int index) {
@@ -298,6 +298,7 @@ public class ChatActivity extends BaseActivity {
                                 Store.setChatTopic(ChatActivity.this, "未命名对话");
                                 topicLabel.setText(Store.chatTopic(ChatActivity.this));
                                 showWelcome();
+                                Banner.show(ChatActivity.this, dark, "新对话", false);
                             }
                         });
             }

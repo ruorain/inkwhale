@@ -352,8 +352,18 @@ public final class Sheet {
 
         d.show();
 
-        panel.setTranslationY(UI.dp(a, 48));
+        // 从下方弹起，带一点过冲再回稳；淡入只走前 40%，避免整块发虚
+        panel.setTranslationY(UI.dp(a, 64));
         panel.setAlpha(0f);
-        panel.animate().translationY(0f).alpha(1f).setDuration(240).start();
+        panel.animate()
+                .translationY(0f)
+                .alpha(1f)
+                .setDuration(300)
+                .setInterpolator(new android.view.animation.PathInterpolator(0.16f, 1.12f, 0.24f, 1f))
+                .start();
+        if (outer != null) {
+            outer.setAlpha(0f);
+            outer.animate().alpha(1f).setDuration(180).start();
+        }
     }
 }
