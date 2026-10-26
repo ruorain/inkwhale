@@ -7,7 +7,7 @@
 
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
-$node = 'C:\Users\buguo\.dsh\dsh-runtimes\dsh-primary-runtime\dependencies\node\bin\node.exe'
+$node = if ($env:DSH_NODE) { $env:DSH_NODE } else { 'node' }
 
 Write-Host ''
 Write-Host '  ─────────────────────────────────────────────' -ForegroundColor DarkGray
