@@ -36,7 +36,8 @@ public class EditorActivity extends BaseActivity {
 
     private String path;      // null 表示新建
     private String sha;       // null 表示新建
-    private String original;  // 打开时的原文，用于归档
+    private String original;
+    private boolean exitAfterSave;  // 打开时的原文，用于归档
     private boolean busy;
 
     @Override
@@ -410,6 +411,31 @@ public class EditorActivity extends BaseActivity {
                         doSave(index == 0);
                     }
                 });
+    }
+
+    @Override
+    public void onBackPressed() {
+        String now = editor.getText().toString();
+        boolean changed = original == null
+                ? !now.trim().isEmpty()
+                : !now.trim().equals(original.trim());
+        if (changed && !busy && !offline && !Store.token(this).isEmpty()) {
+            // 直接返回也存一份，不弹确认
+            exitAfterSave = true;
+            doSave(false);
+            return;
+        }
+        if (changed) {
+            // 离线或没令牌：至少把内容留在本地草稿
+            String target = (path != null) ? path : buildNewPath(ensureMeta(now));
+            if (target != null) {
+                Store.saveDraft(this, target, ensureMeta(now),
+                        original != null ? original : Store.cachedFile(this, target));
+                toast("没联网，先存在本地了");
+            }
+        }
+        super.onBackPressed();
+        overridePendingTransition(R.anim.back_in, R.anim.back_out);
     }
 
     private void doSave(boolean iterate) {
